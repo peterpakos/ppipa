@@ -18,6 +18,5 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
 from .__version__ import __version__
 from .ppipa import FreeIPAServer

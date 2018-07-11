@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""PP's FreeIPA Module
+"""PP's FreeIPA Server Class
 
 Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -24,12 +24,14 @@ from __future__ import absolute_import, print_function
 import logging
 import ldap
 import socket
+from .freeipauser import FreeIPAUser
+
+log = logging.getLogger(__name__)
 
 
 class FreeIPAServer(object):
     def __init__(self, host, binddn='cn=Directory Manager', bindpw='', timeout=5, tls=True):
-        self._log = logging.getLogger(__name__)
-        self._log.debug('Initialising FreeIPA server %s' % host)
+        log.debug('Initialising FreeIPA server %s' % host)
         self._host = host
         self._binddn = binddn
         self._bindpw = bindpw
@@ -40,9 +42,9 @@ class FreeIPAServer(object):
         self._get_fqdn()
         self._hostname, _, self._domain = str(self._fqdn).partition('.')
         self._get_ip()
-        self._log.debug('Hostname: %s, Domain: %s, IP: %s' % (self._hostname, self._domain, self._ip))
+        log.debug('Hostname: %s, Domain: %s, IP: %s' % (self._hostname, self._domain, self._ip))
         self._get_base_dn()
-        self._log.debug('Base DN: %s' % self._base_dn)
+        log.debug('Base DN: %s' % self._base_dn)
         self._active_user_base = 'cn=users,cn=accounts,' + self._base_dn
         self._stage_user_base = 'cn=staged users,cn=accounts,cn=provisioning,' + self._base_dn
         self._preserved_user_base = 'cn=deleted users,cn=accounts,cn=provisioning,' + self._base_dn
@@ -63,9 +65,9 @@ class FreeIPAServer(object):
                 msg = e.message['desc']
             else:
                 msg = e.args[0]['desc']
-            self._log.critical(msg)
+            log.critical(msg)
             raise
-        self._log.debug('%s connection established' % ('LDAPS' if self._tls else 'LDAP'))
+        log.debug('%s connection established' % ('LDAPS' if self._tls else 'LDAP'))
         self._conn = conn
 
     @staticmethod
@@ -83,7 +85,7 @@ class FreeIPAServer(object):
         try:
             results = self._conn.search_s(base, scope, fltr, attrs)
         except Exception as e:
-            self._log.exception(self._get_ldap_msg(e))
+            log.exception(self._get_ldap_msg(e))
             results = False
         return results
 
@@ -144,20 +146,21 @@ class FreeIPAServer(object):
             scope=ldap.SCOPE_ONELEVEL
         )
         for dn, attrs in results:
-            uid = attrs['uid'][0].decode('utf-8', 'ignore')
-            a = {}
-            for k, v in attrs.items():
-                if type(v) is list:
-                    a[k] = [i.decode('utf-8', 'ignore') for i in v]
-                else:
-                    a[k] = [v.decode('utf-8')]
+            uid = attrs.get('uid')[0].decode('utf-8', 'ignore')
+            getattr(self, '_%s_users' % user_base)[uid] = FreeIPAUser(dn, attrs)
 
-            getattr(self, '_%s_users' % user_base)[uid] = a
-
-    def find_uid_by_email(self, email, user_base='active'):
-        uids = []
-        for uid, attrs in getattr(self, '%s_users' % user_base).items():
-            mail = attrs.get('mail')
+    def find_user_by_email(self, email, user_base='active'):
+        users = []
+        for uid, user in getattr(self, '%s_users' % user_base).items():
+            mail = user.mail
             if mail and email in mail:
-                uids.append(uid)
-        return uids
+                users.append(user)
+        if len(users) == 0:
+            return None
+        elif len(users) == 1:
+            return users[0]
+        else:
+            return users
+
+    def count_users(self, user_base='active'):
+        return len(getattr(self, '%s_users' % user_base))

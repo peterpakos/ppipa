@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Python Template
+"""PP's FreeIPA Module
+
+ppipa allows easy interaction with FreeIPA servers.
 
 Author: Peter Pakos <peter.pakos@wandisco.com>
 

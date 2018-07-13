@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""PP's FreeIPA Server Class
+"""FreeIPA Server Class
 
 Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -30,7 +29,9 @@ log = logging.getLogger(__name__)
 
 
 class FreeIPAServer(object):
+    """Define FreeIPA server object"""
     def __init__(self, host, binddn='cn=Directory Manager', bindpw='', timeout=5, tls=True):
+        """Initialise object"""
         log.debug('Initialising FreeIPA server %s' % host)
         self._host = host
         self._binddn = binddn
@@ -52,8 +53,10 @@ class FreeIPAServer(object):
         self._active_users = {}
         self._stage_users = {}
         self._preserved_users = {}
+        self._anon_bind = None
 
     def _get_conn(self):
+        """Establish connection to the server"""
         if self._tls:
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
         try:
@@ -72,6 +75,7 @@ class FreeIPAServer(object):
 
     @staticmethod
     def _get_ldap_msg(e):
+        """Extract LDAP exception message"""
         msg = e
         if hasattr(e, 'message'):
             msg = e.message
@@ -82,6 +86,7 @@ class FreeIPAServer(object):
         return msg
 
     def _search(self, base, fltr, attrs=None, scope=ldap.SCOPE_SUBTREE):
+        """Perform LDAP search"""
         try:
             results = self._conn.search_s(base, scope, fltr, attrs)
         except Exception as e:
@@ -90,6 +95,7 @@ class FreeIPAServer(object):
         return results
 
     def _get_fqdn(self):
+        """Get FQDN from LDAP"""
         results = self._search(
             'cn=config',
             '(objectClass=*)',
@@ -104,9 +110,11 @@ class FreeIPAServer(object):
         self._fqdn = r
 
     def _get_ip(self):
+        """Resolve FQDN to IP address"""
         self._ip = socket.gethostbyname(self._fqdn)
 
     def _get_base_dn(self):
+        """Get Base DN from LDAP"""
         results = self._search(
             'cn=config',
             '(objectClass=*)',
@@ -120,25 +128,14 @@ class FreeIPAServer(object):
             r = attrs['nsslapd-defaultnamingcontext'][0].decode('utf-8')
         self._base_dn = r
 
-    @property
-    def active_users(self):
-        if not self._active_users:
-            self._get_users(user_base='active')
-        return self._active_users
-
-    @property
-    def stage_users(self):
-        if not self._stage_users:
-            self._get_users(user_base='stage')
-        return self._stage_users
-
-    @property
-    def preserved_users(self):
-        if not self._preserved_users:
-            self._get_users(user_base='preserved')
-        return self._preserved_users
+    def users(self, user_base='active'):
+        """Return dict of users"""
+        if not getattr(self, '_%s_users' % user_base):
+            self._get_users(user_base)
+        return getattr(self, '_%s_users' % user_base)
 
     def _get_users(self, user_base):
+        """"Get users from LDAP"""
         results = self._search(
             getattr(self, '_%s_user_base' % user_base),
             '(objectClass=*)',
@@ -150,8 +147,9 @@ class FreeIPAServer(object):
             getattr(self, '_%s_users' % user_base)[uid] = FreeIPAUser(dn, attrs)
 
     def find_user_by_email(self, email, user_base='active'):
+        """Return user/users with given email address"""
         users = []
-        for uid, user in getattr(self, '%s_users' % user_base).items():
+        for user in getattr(self, 'users')(user_base).values():
             mail = user.mail
             if mail and email in mail:
                 users.append(user)
@@ -163,4 +161,27 @@ class FreeIPAServer(object):
             return users
 
     def count_users(self, user_base='active'):
-        return len(getattr(self, '%s_users' % user_base))
+        """Return users count"""
+        return len(getattr(self, 'users')(user_base))
+
+    def _get_anon_bind(self):
+        """Check anonymous bind"""
+        r = self._search(
+            'cn=config',
+            '(objectClass=*)',
+            ['nsslapd-allow-anonymous-access'],
+            scope=ldap.SCOPE_BASE
+        )
+        dn, attrs = r[0]
+        state = attrs.get('nsslapd-allow-anonymous-access')[0].decode('utf-8', 'ignore')
+        if state in ['on', 'off', 'rootdse']:
+            r = state
+        else:
+            r = None
+        self._anon_bind = r
+
+    @property
+    def anon_bind(self):
+        if not self._anon_bind:
+            self._get_anon_bind()
+        return self._anon_bind

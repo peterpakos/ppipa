@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""PP's FreeIPA User Class
+"""FreeIPA User Class
 
 Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -27,7 +26,9 @@ log = logging.getLogger(__name__)
 
 
 class FreeIPAUser(object):
+    """FreeIPA User Class"""
     def __init__(self, dn, attrs):
+        """Initialise object"""
         self._dn = dn
         self._attrs = attrs
 
@@ -80,6 +81,7 @@ class FreeIPAUser(object):
         return self._get('objectClass')
 
     def _get(self, attr):
+        """Return user's attribute/attributes"""
         a = self._attrs.get(attr)
         if not a:
             return None

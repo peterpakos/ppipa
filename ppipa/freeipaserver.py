@@ -165,7 +165,9 @@ class FreeIPAServer(object):
         return len(getattr(self, 'users')(user_base))
 
     def _get_anon_bind(self):
-        """Check anonymous bind"""
+        """Check anonymous bind
+        :return: 'on', 'off', 'rootdse' or None
+        """
         r = self._search(
             'cn=config',
             '(objectClass=*)',

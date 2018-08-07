@@ -39,23 +39,17 @@ class FreeIPAServer(object):
         self._timeout = timeout
         self._tls = tls
         self._url = 'ldaps://' + host if self._tls else 'ldap://' + host
-        self._get_conn()
-        self._get_fqdn()
-        self._hostname, _, self._domain = str(self._fqdn).partition('.')
-        self._get_ip()
-        log.debug('Hostname: %s, Domain: %s, IP: %s' % (self._hostname, self._domain, self._ip))
-        self._get_base_dn()
-        log.debug('Base DN: %s' % self._base_dn)
-        self._active_user_base = 'cn=users,cn=accounts,' + self._base_dn
-        self._stage_user_base = 'cn=staged users,cn=accounts,cn=provisioning,' + self._base_dn
-        self._preserved_user_base = 'cn=deleted users,cn=accounts,cn=provisioning,' + self._base_dn
-        self._groups_base = 'cn=groups,cn=accounts,' + self._base_dn
+        self._set_conn()
+        self._set_fqdn()
+        self._set_hostname_domain()
+        self._set_ip()
+        self._set_base_dn()
         self._active_users = {}
         self._stage_users = {}
         self._preserved_users = {}
         self._anon_bind = None
 
-    def _get_conn(self):
+    def _set_conn(self):
         """Establish connection to the server"""
         if self._tls:
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
@@ -94,7 +88,7 @@ class FreeIPAServer(object):
             results = False
         return results
 
-    def _get_fqdn(self):
+    def _set_fqdn(self):
         """Get FQDN from LDAP"""
         results = self._search(
             'cn=config',
@@ -108,12 +102,19 @@ class FreeIPAServer(object):
             dn, attrs = results[0]
             r = attrs['nsslapd-localhost'][0].decode('utf-8')
         self._fqdn = r
+        log.debug('FQDN: %s' % self._fqdn)
 
-    def _get_ip(self):
+    def _set_hostname_domain(self):
+        """Extract hostname and domain"""
+        self._hostname, _, self._domain = str(self._fqdn).partition('.')
+        log.debug('Hostname: %s, Domain: %s' % (self._hostname, self._domain))
+
+    def _set_ip(self):
         """Resolve FQDN to IP address"""
         self._ip = socket.gethostbyname(self._fqdn)
+        log.debug('IP: %s' % self._ip)
 
-    def _get_base_dn(self):
+    def _set_base_dn(self):
         """Get Base DN from LDAP"""
         results = self._search(
             'cn=config',
@@ -121,12 +122,17 @@ class FreeIPAServer(object):
             ['nsslapd-defaultnamingcontext'],
             scope=ldap.SCOPE_BASE
         )
-        if not results and type(results) is not list:
-            r = None
-        else:
+        if results and type(results) is list:
             dn, attrs = results[0]
             r = attrs['nsslapd-defaultnamingcontext'][0].decode('utf-8')
+        else:
+            raise Exception
         self._base_dn = r
+        self._active_user_base = 'cn=users,cn=accounts,' + self._base_dn
+        self._stage_user_base = 'cn=staged users,cn=accounts,cn=provisioning,' + self._base_dn
+        self._preserved_user_base = 'cn=deleted users,cn=accounts,cn=provisioning,' + self._base_dn
+        self._groups_base = 'cn=groups,cn=accounts,' + self._base_dn
+        log.debug('Base DN: %s' % self._base_dn)
 
     def users(self, user_base='active'):
         """Return dict of users"""
@@ -145,24 +151,21 @@ class FreeIPAServer(object):
         for dn, attrs in results:
             uid = attrs.get('uid')[0].decode('utf-8', 'ignore')
             getattr(self, '_%s_users' % user_base)[uid] = FreeIPAUser(dn, attrs)
+        log.debug('%s users: %s' % (user_base.capitalize(), len(getattr(self, '_%s_users' % user_base))))
 
     def find_user_by_email(self, email, user_base='active'):
-        """Return user/users with given email address"""
+        """Return list of users with given email address"""
         users = []
         for user in getattr(self, 'users')(user_base).values():
             mail = user.mail
             if mail and email in mail:
                 users.append(user)
-        if len(users) == 0:
-            return None
-        elif len(users) == 1:
-            return users[0]
-        else:
-            return users
+        log.debug('%s users with email address %s: %s' % (user_base.capitalize(), email, len(users)))
+        return users
 
     def count_users(self, user_base='active'):
         """Return users count"""
-        return len(getattr(self, 'users')(user_base))
+        return len(self.users(user_base))
 
     def _get_anon_bind(self):
         """Check anonymous bind

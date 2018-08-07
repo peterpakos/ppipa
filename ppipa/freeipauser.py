@@ -84,12 +84,9 @@ class FreeIPAUser(object):
         """Return user's attribute/attributes"""
         a = self._attrs.get(attr)
         if not a:
-            return None
-        elif type(a) is list:
-            if len(a) == 1:
-                r = a[0].decode('utf-8', 'ignore')
-            else:
-                r = [i.decode('utf-8', 'ignore') for i in a]
+            return []
+        if type(a) is list:
+            r = [i.decode('utf-8', 'ignore') for i in a]
         else:
-            r = a.decode('utf-8', 'ignore')
+            r = [a.decode('utf-8', 'ignore')]
         return r

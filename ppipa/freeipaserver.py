@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import, print_function
 import logging
 import ldap
+import ldap.modlist
 import socket
 from .freeipauser import FreeIPAUser
 
@@ -153,7 +154,7 @@ class FreeIPAServer(object):
             getattr(self, '_%s_users' % user_base)[uid] = FreeIPAUser(dn, attrs)
         log.debug('%s users: %s' % (user_base.capitalize(), len(getattr(self, '_%s_users' % user_base))))
 
-    def find_user_by_email(self, email, user_base='active'):
+    def find_users_by_email(self, email, user_base='active'):
         """Return list of users with given email address"""
         users = []
         for user in getattr(self, 'users')(user_base).values():
@@ -190,3 +191,43 @@ class FreeIPAServer(object):
         if not self._anon_bind:
             self._get_anon_bind()
         return self._anon_bind
+
+    def add_user(self, uid, employee_number, given_name, sn, department_number, title, mobile, mail, ou):
+        dn = 'uid=%s,%s' % (uid, self._stage_user_base)
+        attrs = dict()
+        attrs['objectclass'] = ['top', 'posixaccount', 'person', 'inetorgperson', 'organizationalperson']
+        attrs['cn'] = str(given_name).capitalize() + ' ' + str(sn).capitalize()
+        attrs['givenName'] = str(given_name).capitalize()
+        attrs['sn'] = str(sn).capitalize()
+        attrs['uid'] = uid
+        attrs['uidNumber'] = '-1'
+        attrs['gidNumber'] = '707'
+        attrs['title'] = title if title else ''
+        attrs['mobile'] = mobile if mobile else ''
+        attrs['telephoneNumber'] = mobile if mobile else ''
+        attrs['mail'] = mail if mail else ''
+        attrs['homeDirectory'] = '/home/' + uid
+        attrs['loginShell'] = '/usr/sbin/nologin'
+        attrs['employeeNumber'] = employee_number if employee_number else ''
+        attrs['departmentNumber'] = department_number if department_number else ''
+        attrs['ou'] = ou if ou else ''
+        ldif = ldap.modlist.addModlist(attrs)
+        try:
+            self._conn.add_s(dn, ldif)
+        except ldap.LDAPError:
+            return False
+        return True
+
+    def modify(self, dn, attr, old_value, new_value):
+        old_value = '' if not old_value else [old_value]
+        new_value = '' if not new_value else [new_value]
+        old = {attr: old_value}
+        new = {attr: new_value}
+        ldif = ldap.modlist.modifyModlist(old, new)
+
+        try:
+            self._conn.modify_s(dn, ldif)
+        except ldap.LDAPError:
+            return False
+
+        return True

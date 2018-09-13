@@ -31,6 +31,7 @@ class FreeIPAUser(object):
         """Initialise object"""
         self._dn = dn
         self._attrs = attrs
+        self._base_dn = str(dn).partition('cn=users,cn=accounts,')[2]
 
     @property
     def dn(self):
@@ -38,49 +39,81 @@ class FreeIPAUser(object):
 
     @property
     def uid(self):
-        return self._get('uid')
+        return self._get_attr('uid')
 
     @property
     def given_name(self):
-        return self._get('givenName')
+        return self._get_attr('givenName')
 
     @property
     def sn(self):
-        return self._get('sn')
-
-    @property
-    def mail(self):
-        return self._get('mail')
-
-    @property
-    def title(self):
-        return self._get('title')
-
-    @property
-    def home_directory(self):
-        return self._get('homeDirectory')
+        return self._get_attr('sn')
 
     @property
     def cn(self):
-        return self._get('cn')
+        return self._get_attr('cn')
+
+    @property
+    def title(self):
+        return self._get_attr('title')
+
+    @property
+    def home_directory(self):
+        return self._get_attr('homeDirectory')
 
     @property
     def uid_number(self):
-        return self._get('uidNumber')
+        return self._get_attr('uidNumber')
 
     @property
     def gid_number(self):
-        return self._get('gidNumber')
+        return self._get_attr('gidNumber')
 
     @property
     def login_shell(self):
-        return self._get('loginShell')
+        return self._get_attr('loginShell')
+
+    @property
+    def employee_number(self):
+        return self._get_attr('employeeNumber')
+
+    @property
+    def department_number(self):
+        return self._get_attr('departmentNumber')
+
+    @property
+    def ou(self):
+        return self._get_attr('ou')
+
+    @property
+    def mail(self):
+        return self._get_attr_list('mail')
+
+    @property
+    def mobile(self):
+        return self._get_attr_list('mobile')
+
+    @property
+    def telephone_number(self):
+        return self._get_attr_list('telephoneNumber')
 
     @property
     def object_class(self):
-        return self._get('objectClass')
+        return self._get_attr_list('objectClass')
 
-    def _get(self, attr):
+    @property
+    def member_of(self):
+        return self._get_attr_list('memberOf')
+
+    def is_member_of(self, group_name):
+        """Return True if member of LDAP group, otherwise return False"""
+        group_dn = 'cn=%s,cn=groups,cn=accounts,%s' % (group_name, self._base_dn)
+        if str(group_dn).lower() in [str(i).lower() for i in self.member_of]:
+            return True
+        else:
+            return False
+
+    def _get_attr_list(self, attr):
         """Return user's attribute/attributes"""
         a = self._attrs.get(attr)
         if not a:
@@ -89,4 +122,9 @@ class FreeIPAUser(object):
             r = [i.decode('utf-8', 'ignore') for i in a]
         else:
             r = [a.decode('utf-8', 'ignore')]
+        return r
+
+    def _get_attr(self, x):
+        y = self._get_attr_list(x)
+        r = y[0] if type(y) is list and len(y) > 0 else None
         return r

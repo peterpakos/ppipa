@@ -19,12 +19,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from __future__ import absolute_import, print_function
+from __future__ import print_function
 import logging
 import ldap
 import ldap.modlist
 import socket
 from .freeipauser import FreeIPAUser
+from unidecode import unidecode
 
 log = logging.getLogger(__name__)
 
@@ -152,6 +153,7 @@ class FreeIPAServer(object):
         for dn, attrs in results:
             uid = attrs.get('uid')[0].decode('utf-8', 'ignore')
             getattr(self, '_%s_users' % user_base)[uid] = FreeIPAUser(dn, attrs)
+            # print(attrs)
         log.debug('%s users: %s' % (user_base.capitalize(), len(getattr(self, '_%s_users' % user_base))))
 
     def find_users_by_email(self, email, user_base='active'):
@@ -192,35 +194,38 @@ class FreeIPAServer(object):
             self._get_anon_bind()
         return self._anon_bind
 
-    def add_user(self, uid, employee_number, given_name, sn, department_number, title, mobile, mail, ou):
+    def add_user(self, uid, employee_number, given_name, sn, department_number, title, mobile, mail, ou, gid='-1'):
+        uid = unidecode(uid)
         dn = 'uid=%s,%s' % (uid, self._stage_user_base)
         attrs = dict()
-        attrs['objectclass'] = ['top', 'posixaccount', 'person', 'inetorgperson', 'organizationalperson']
-        attrs['cn'] = str(given_name).capitalize() + ' ' + str(sn).capitalize()
-        attrs['givenName'] = str(given_name).capitalize()
-        attrs['sn'] = str(sn).capitalize()
-        attrs['uid'] = uid
-        attrs['uidNumber'] = '-1'
-        attrs['gidNumber'] = '707'
-        attrs['title'] = title if title else ''
-        attrs['mobile'] = mobile if mobile else ''
-        attrs['telephoneNumber'] = mobile if mobile else ''
-        attrs['mail'] = mail if mail else ''
-        attrs['homeDirectory'] = '/home/' + uid
-        attrs['loginShell'] = '/usr/sbin/nologin'
-        attrs['employeeNumber'] = employee_number if employee_number else ''
-        attrs['departmentNumber'] = department_number if department_number else ''
-        attrs['ou'] = ou if ou else ''
+        attrs['objectclass'] = [b'top', b'posixaccount', b'person', b'inetorgperson', b'organizationalperson']
+        attrs['cn'] = ('%s %s' % (given_name.capitalize(), sn.capitalize())).encode('utf8')
+        attrs['givenName'] = given_name.capitalize().encode('utf8')
+        attrs['sn'] = sn.capitalize().encode('utf8')
+        attrs['uid'] = uid.encode('utf8')
+        attrs['uidNumber'] = '-1'.encode('utf8')
+        attrs['gidNumber'] = gid.encode('utf8')
+        attrs['title'] = title.encode('utf8') if title else ''
+        attrs['mobile'] = mobile.encode('utf8') if mobile else ''
+        attrs['telephoneNumber'] = mobile.encode('utf8') if mobile else ''
+        attrs['mail'] = mail.encode('utf8') if mail else ''
+        attrs['homeDirectory'] = ('/home/%s' % uid).encode('utf8')
+        attrs['loginShell'] = '/usr/sbin/nologin'.encode('utf8')
+        attrs['employeeNumber'] = employee_number.encode('utf8') if employee_number else ''
+        attrs['departmentNumber'] = department_number.encode('utf8') if department_number else ''
+        attrs['ou'] = ou.encode('utf8') if ou else ''
         ldif = ldap.modlist.addModlist(attrs)
         try:
             self._conn.add_s(dn, ldif)
-        except ldap.LDAPError:
+        except ldap.LDAPError as e:
+            log.error('Failed to add user %s: %s' % (uid, self._get_ldap_msg(e)))
             return False
+        log.debug('Added user %s' % uid)
         return True
 
     def modify(self, dn, attr, old_value, new_value):
-        old_value = '' if not old_value else [old_value]
-        new_value = '' if not new_value else [new_value]
+        old_value = '' if not old_value else [old_value.encode('utf8')]
+        new_value = '' if not new_value else [new_value.encode('utf8')]
         old = {attr: old_value}
         new = {attr: new_value}
         ldif = ldap.modlist.modifyModlist(old, new)

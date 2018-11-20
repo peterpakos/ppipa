@@ -195,6 +195,10 @@ class FreeIPAServer(object):
         return self._anon_bind
 
     def add_user(self, uid, employee_number, given_name, sn, department_number, title, mobile, mail, ou, gid='-1'):
+        try:
+            uid = uid.decode('utf8')
+        except AttributeError:
+            pass
         uid = unidecode(uid)
         dn = 'uid=%s,%s' % (uid, self._stage_user_base)
         attrs = dict()

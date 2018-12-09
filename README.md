@@ -20,4 +20,11 @@ $ pip install --user ppipa
 from ppipa import FreeIPAServer
 
 ipa = FreeIPAServer(host='ipa01.example.com', bindpw='password')
+
+users = ipa.find_users_by_email(email='first.last@example.com')
+n = len(users)
+
+user = ipa.users().get('first.last')
+cn = user.cn
+is_ldap_group_member = user.is_member_of('ldap_group')
 ```

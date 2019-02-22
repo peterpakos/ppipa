@@ -33,6 +33,9 @@ class FreeIPAUser(object):
         self._attrs = attrs
         self._base_dn = str(dn).partition('cn=users,cn=accounts,')[2]
 
+    def __repr__(self):
+        return 'FreeIPAUser(%r)' % self._dn
+
     @property
     def dn(self):
         return self._dn

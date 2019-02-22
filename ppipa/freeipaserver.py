@@ -51,6 +51,10 @@ class FreeIPAServer(object):
         self._preserved_users = {}
         self._anon_bind = None
 
+    def __repr__(self):
+        """String representation of the object"""
+        return 'FreeIPAServer(%r)' % self._host
+
     def _set_conn(self):
         """Establish connection to the server"""
         if self._tls:
@@ -195,6 +199,7 @@ class FreeIPAServer(object):
         return self._anon_bind
 
     def add_user(self, uid, employee_number, given_name, sn, department_number, title, mobile, mail, ou, gid='-1'):
+        print(given_name, sn)
         try:
             uid = uid.decode('utf8')
         except AttributeError:
@@ -203,9 +208,9 @@ class FreeIPAServer(object):
         dn = 'uid=%s,%s' % (uid, self._stage_user_base)
         attrs = dict()
         attrs['objectclass'] = [b'top', b'posixaccount', b'person', b'inetorgperson', b'organizationalperson']
-        attrs['cn'] = ('%s %s' % (given_name.capitalize(), sn.capitalize())).encode('utf8')
-        attrs['givenName'] = given_name.capitalize().encode('utf8')
-        attrs['sn'] = sn.capitalize().encode('utf8')
+        attrs['cn'] = ('%s %s' % (given_name, sn)).encode('utf8')
+        attrs['givenName'] = given_name.encode('utf8')
+        attrs['sn'] = sn.encode('utf8')
         attrs['uid'] = uid.encode('utf8')
         attrs['uidNumber'] = '-1'.encode('utf8')
         attrs['gidNumber'] = gid.encode('utf8')

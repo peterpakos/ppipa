@@ -164,8 +164,8 @@ class FreeIPAServer(object):
         """Return list of users with given email address"""
         users = []
         for user in getattr(self, 'users')(user_base).values():
-            mail = user.mail
-            if mail and email in mail:
+            mail = [m.lower() for m in user.mail]
+            if mail and email.lower() in mail:
                 users.append(user)
         log.debug('%s users with email address %s: %s' % (user_base.capitalize(), email, len(users)))
         return users
